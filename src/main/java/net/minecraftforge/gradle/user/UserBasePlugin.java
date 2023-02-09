@@ -564,36 +564,6 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
                     compile.dependsOn(task);
                     compile.setSource(dir);
                 }
-
-                // kotlin
-                if (project.getPlugins().hasPlugin("kotlin")) {
-                    Object langSet = new DslObject(set).getConvention().getPlugins().get("kotlin");
-                    File dir = new File(dirRoot, "kotlin");
-
-                    task = makeTask(taskPrefix + "Kotlin", TaskSourceCopy.class);
-                    task.setSource((SourceDirectorySet) ReflectionUtil.callMethod(langSet, "getKotlin"));
-                    task.setOutput(dir);
-
-                    // must get replacements from extension afterEValuate()
-
-                    AbstractCompile compile = (AbstractCompile) project.getTasks().getByName(set.getCompileTaskName("kotlin"));
-                    compile.dependsOn(task);
-                    compile.setSource(dir);
-                    Path dirPath = dir.toPath();
-
-                    // Apparently the Kotlin plugin doesn't respect setSource in any way, so this is required
-                    compile.include(new Closure<Boolean>(UserBasePlugin.class) {
-                        private static final long serialVersionUID = -6765183773807992625L;
-
-                        @Override
-                        public Boolean call(Object o) {
-                            if (o instanceof FileTreeElement) {
-                                return ((FileTreeElement) o).getFile().toPath().startsWith(dirPath);
-                            }
-                            return super.call();
-                        }
-                    });
-                }
             }
         };
 
