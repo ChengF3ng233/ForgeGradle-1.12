@@ -350,15 +350,6 @@ public class UserBaseExtension extends BaseExtension
         return resolve(getServerJvmArgs());
     }
 
-    /**
-     * Set the VM arguments for the server run config
-     *
-     * @param serverJvmArgs The server JVM args
-     */
-    public void setServerJvmArgs(List<Object> serverJvmArgs)
-    {
-        this.serverJvmArgs = serverJvmArgs;
-    }
 
     /**
      * Get the run arguments for the server run config

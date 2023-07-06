@@ -32,7 +32,6 @@ import net.minecraftforge.gradle.tasks.*;
 import net.minecraftforge.gradle.tasks.fernflower.ApplyFernFlowerTask;
 import net.minecraftforge.gradle.user.ReobfTaskFactory.ReobfTaskWrapper;
 import net.minecraftforge.gradle.util.GradleConfigurationException;
-import net.minecraftforge.gradle.util.ReflectionUtil;
 import net.minecraftforge.gradle.util.delayed.DelayedFile;
 import org.gradle.api.*;
 import org.gradle.api.artifacts.*;
@@ -40,8 +39,6 @@ import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.maven.Conf2ScopeMappingContainer;
 import org.gradle.api.artifacts.result.*;
 import org.gradle.api.file.ConfigurableFileCollection;
-import org.gradle.api.file.FileTreeElement;
-import org.gradle.api.file.SourceDirectorySet;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -52,14 +49,12 @@ import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.ScalaSourceSet;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.bundling.Jar;
-import org.gradle.api.tasks.compile.AbstractCompile;
 import org.gradle.api.tasks.compile.GroovyCompile;
 import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.api.tasks.javadoc.Javadoc;
 import org.gradle.api.tasks.scala.ScalaCompile;
 import org.gradle.jvm.JvmLibrary;
 import org.gradle.language.base.artifact.SourcesArtifact;
-import org.gradle.plugins.ide.eclipse.model.EclipseModel;
 import org.gradle.plugins.ide.idea.model.IdeaModel;
 import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
@@ -76,7 +71,6 @@ import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -124,11 +118,6 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
         task.setGroup("ForgeGradle");
         task.dependsOn(TASK_DD_PROVIDED, TASK_DD_COMPILE);
 
-        task = makeTask(TASK_SETUP_DECOMP, DefaultTask.class);
-        task.setDescription("DevWorkspace + the deobfuscated Minecraft source linked as a source jar.");
-        task.setGroup("ForgeGradle");
-        task.dependsOn(TASK_DD_PROVIDED, TASK_DD_COMPILE);
-
         // create configs
         project.getConfigurations().maybeCreate(CONFIG_MC);
         project.getConfigurations().maybeCreate(CONFIG_PROVIDED);
@@ -153,8 +142,7 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
         makeRunTasks();
 
         // IDE stuff
-        configureEclipse();
-        configureIntellij();
+        configureIdea();
 
         applyUserPlugin();
     }
@@ -176,9 +164,7 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
         // add replacements for run configs and gradle start
         T ext = getExtension();
         replacer.putReplacement(REPLACE_CLIENT_TWEAKER, getClientTweaker(ext));
-        replacer.putReplacement(REPLACE_SERVER_TWEAKER, getServerTweaker(ext));
         replacer.putReplacement(REPLACE_CLIENT_MAIN, getClientRunClass(ext));
-        replacer.putReplacement(REPLACE_SERVER_MAIN, getServerRunClass(ext));
 
         // map configurations (only if the maven or maven publish plugins exist)
         mapConfigurations();
@@ -221,29 +207,15 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
         // Add the mod and stuff to the classpath of the exec tasks.
         final Jar jarTask = (Jar) project.getTasks().getByName("jar");
 
-        if (this.hasClientRun()) {
-            JavaExec exec = (JavaExec) project.getTasks().getByName("runClient");
-            exec.classpath(project.getConfigurations().getByName(CONFIG_RUNTIME_CLASSPATH));
-            exec.classpath(project.getConfigurations().getByName(CONFIG_MC));
-            exec.classpath(project.getConfigurations().getByName(CONFIG_MC_DEPS));
-            exec.classpath(project.getConfigurations().getByName(CONFIG_START));
-            exec.classpath(ArchiveTaskHelper.getArchivePath(jarTask));
-            exec.dependsOn(jarTask);
-            exec.jvmArgs(getClientJvmArgs(getExtension()));
-            exec.args(getClientRunArgs(getExtension()));
-        }
-
-        if (this.hasServerRun()) {
-            JavaExec exec = (JavaExec) project.getTasks().getByName("runServer");
-            exec.classpath(project.getConfigurations().getByName(CONFIG_RUNTIME_CLASSPATH));
-            exec.classpath(project.getConfigurations().getByName(CONFIG_MC));
-            exec.classpath(project.getConfigurations().getByName(CONFIG_MC_DEPS));
-            exec.classpath(project.getConfigurations().getByName(CONFIG_START));
-            exec.classpath(ArchiveTaskHelper.getArchivePath(jarTask));
-            exec.dependsOn(jarTask);
-            exec.jvmArgs(getServerJvmArgs(getExtension()));
-            exec.args(getServerRunArgs(getExtension()));
-        }
+        JavaExec exec = (JavaExec) project.getTasks().getByName("runClient");
+        exec.classpath(project.getConfigurations().getByName(CONFIG_RUNTIME_CLASSPATH));
+        exec.classpath(project.getConfigurations().getByName(CONFIG_MC));
+        exec.classpath(project.getConfigurations().getByName(CONFIG_MC_DEPS));
+        exec.classpath(project.getConfigurations().getByName(CONFIG_START));
+        exec.classpath(ArchiveTaskHelper.getArchivePath(jarTask));
+        exec.dependsOn(jarTask);
+        exec.jvmArgs(getClientJvmArgs(getExtension()));
+        exec.args(getClientRunArgs(getExtension()));
 
         // complain about version number
         // blame cazzar if this regex doesnt work
@@ -349,24 +321,16 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
         {
             makeStart.addResource(GRADLE_START_RESOURCES[2]); // gradle start common.
 
-            if (this.hasClientRun()) {
-                makeStart.addResource(GRADLE_START_RESOURCES[0]); // gradle start
 
-                makeStart.addReplacement("@@ASSETINDEX@@", delayedString(REPLACE_ASSET_INDEX));
-                makeStart.addReplacement("@@ASSETSDIR@@", delayedFile(REPLACE_CACHE_DIR + "/assets"));
-                makeStart.addReplacement("@@NATIVESDIR@@", delayedFile(DIR_NATIVES));
-                makeStart.addReplacement("@@TWEAKERCLIENT@@", delayedString(REPLACE_CLIENT_TWEAKER));
-                makeStart.addReplacement("@@BOUNCERCLIENT@@", delayedString(REPLACE_CLIENT_MAIN));
+            makeStart.addResource(GRADLE_START_RESOURCES[0]); // gradle start
 
-                makeStart.dependsOn(TASK_DL_ASSET_INDEX, TASK_DL_ASSETS, TASK_EXTRACT_NATIVES);
-            }
+            makeStart.addReplacement("@@ASSETINDEX@@", delayedString(REPLACE_ASSET_INDEX));
+            makeStart.addReplacement("@@ASSETSDIR@@", delayedFile(REPLACE_CACHE_DIR + "/assets"));
+            makeStart.addReplacement("@@NATIVESDIR@@", delayedFile(DIR_NATIVES));
+            makeStart.addReplacement("@@TWEAKERCLIENT@@", delayedString(REPLACE_CLIENT_TWEAKER));
+            makeStart.addReplacement("@@BOUNCERCLIENT@@", delayedString(REPLACE_CLIENT_MAIN));
 
-            if (this.hasServerRun()) {
-                makeStart.addResource(GRADLE_START_RESOURCES[1]); // gradle start
-
-                makeStart.addReplacement("@@TWEAKERSERVER@@", delayedString(REPLACE_SERVER_TWEAKER));
-                makeStart.addReplacement("@@BOUNCERSERVER@@", delayedString(REPLACE_SERVER_MAIN));
-            }
+            makeStart.dependsOn(TASK_DL_ASSET_INDEX, TASK_DL_ASSETS, TASK_EXTRACT_NATIVES);
 
             makeStart.addReplacement("@@MCVERSION@@", delayedString(REPLACE_MC_VERSION));
             makeStart.addReplacement("@@SRGDIR@@", delayedFile(DIR_MCP_MAPPINGS + "/srgs/"));
@@ -387,7 +351,6 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
         // add setup dependencies
         project.getTasks().getByName(TASK_SETUP_CI).dependsOn(deobfBin);
         project.getTasks().getByName(TASK_SETUP_DEV).dependsOn(deobfBin, makeStart);
-        project.getTasks().getByName(TASK_SETUP_DECOMP).dependsOn(recompile, makeStart);
 
         // configure MC compiling. This AfterEvaluate section should happen after the one made in
         // also configure the dummy task dependencies
@@ -397,16 +360,10 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
                 if (project.getState().getFailure() != null)
                     return;
 
-                // the recompiled jar exists, or the decomp task is part of the build
-                boolean isDecomp = project.file(recompiledJar).exists() || project.getGradle().getStartParameter().getTaskNames().contains(TASK_SETUP_DECOMP);
+                project.getTasks().getByName("compileJava").dependsOn(UserConstants.TASK_DEOBF_BIN);
+                project.getTasks().getByName("compileApiJava").dependsOn(UserConstants.TASK_DEOBF_BIN);
 
-                // set task dependencies
-                if (!isDecomp) {
-                    project.getTasks().getByName("compileJava").dependsOn(UserConstants.TASK_DEOBF_BIN);
-                    project.getTasks().getByName("compileApiJava").dependsOn(UserConstants.TASK_DEOBF_BIN);
-                }
-
-                afterDecomp(isDecomp, useLocalCache(getExtension()), CONFIG_MC);
+                afterDecomp(useLocalCache(getExtension()));
             }
         });
     }
@@ -420,7 +377,6 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
      * @param classifier    The classifier
      * @return useable deobfsucated output file
      */
-    @SuppressWarnings("serial")
     protected final Object chooseDeobfOutput(final String globalPattern, final String localPattern, final String appendage, final String classifier) {
         return new Closure<DelayedFile>(UserBasePlugin.class) {
             public DelayedFile call() {
@@ -438,7 +394,7 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
      * TODO: add see annotations
      *
      * @param extension The extension object of this plugin
-     * @return whether or not to use the local cache
+     * @return whether to use the local cache
      */
     protected boolean useLocalCache(T extension) {
         if (useLocalCache)
@@ -805,38 +761,19 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
     }
 
     protected void makeRunTasks() {
-        if (this.hasClientRun()) {
-            JavaExec exec = makeTask("runClient", JavaExec.class);
-            exec.getOutputs().dir(delayedFile(REPLACE_RUN_DIR));
-            exec.setMain(GRADLE_START_CLIENT);
-            exec.doFirst(task -> ((JavaExec) task).workingDir(delayedFile(REPLACE_RUN_DIR)));
-            exec.setStandardOutput(System.out);
-            exec.setErrorOutput(System.err);
+        JavaExec exec = makeTask("runClient", JavaExec.class);
+        exec.getOutputs().dir(delayedFile(REPLACE_RUN_DIR));
+        exec.setMain(GRADLE_START_CLIENT);
+        exec.doFirst(task -> ((JavaExec) task).workingDir(delayedFile(REPLACE_RUN_DIR)));
+        exec.setStandardOutput(System.out);
+        exec.setErrorOutput(System.err);
 
-            exec.setGroup("ForgeGradle");
-            exec.setDescription("Runs the Minecraft client");
+        exec.setGroup("ForgeGradle");
+        exec.setDescription("Runs the Minecraft client");
 
-            exec.doFirst(makeRunDir);
+        exec.doFirst(makeRunDir);
 
-            exec.dependsOn("makeStart");
-        }
-
-        if (this.hasServerRun()) {
-            JavaExec exec = makeTask("runServer", JavaExec.class);
-            exec.getOutputs().dir(delayedFile(REPLACE_RUN_DIR));
-            exec.setMain(GRADLE_START_SERVER);
-            exec.doFirst(task -> ((JavaExec) task).workingDir(delayedFile(REPLACE_RUN_DIR)));
-            exec.setStandardOutput(System.out);
-            exec.setStandardInput(System.in);
-            exec.setErrorOutput(System.err);
-
-            exec.setGroup("ForgeGradle");
-            exec.setDescription("Runs the Minecraft Server");
-
-            exec.doFirst(makeRunDir);
-
-            exec.dependsOn("makeStart");
-        }
+        exec.dependsOn("makeStart");
     }
 
     protected final TaskDepDummy getDummyDep(String config, DelayedFile dummy, String taskName) {
@@ -891,25 +828,10 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
     /**
      * This method should add the MC dependency to the supplied config, as well as do any extra configuration that requires the provided information.
      *
-     * @param isDecomp      Whether to use the recmpield MC artifact
-     * @param useLocalCache Whetehr or not ATs were applied to this artifact
-     * @param mcConfig      Which gradle configuration to add the MC dep to
+     * @param useLocalCache Whether ATs were applied to this artifact
      */
-    protected abstract void afterDecomp(boolean isDecomp, boolean useLocalCache, String mcConfig);
+    protected abstract void afterDecomp(boolean useLocalCache);
 
-    /**
-     * This method is called early, and not late.
-     *
-     * @return TRUE if a server run config and GradleStartServer should be created.
-     */
-    protected abstract boolean hasServerRun();
-
-    /**
-     * This method is called early, and not late.
-     *
-     * @return TRUE if a client run config and GradleStart should be created.
-     */
-    protected abstract boolean hasClientRun();
 
     /**
      * The location where the GradleStart files will be generated to.
@@ -925,14 +847,6 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
      * @return empty string if no tweaker. NEVER NULL.
      */
     protected abstract String getClientTweaker(T ext);
-
-    /**
-     * To be inserted into GradleStartServer. Is called late afterEvaluate or at runtime.
-     *
-     * @param ext the Extension object
-     * @return empty string if no tweaker. NEVER NULL.
-     */
-    protected abstract String getServerTweaker(T ext);
 
     /**
      * To be inserted into GradleStart. Is called late afterEvaluate or at runtime.
@@ -959,97 +873,9 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
     protected abstract List<String> getClientJvmArgs(T ext);
 
     /**
-     * To be inserted into GradleStartServer. Is called late afterEvaluate or at runtime.
-     *
-     * @param ext the Extension object
-     * @return empty string if default launchwrapper. NEVER NULL.
-     */
-    protected abstract String getServerRunClass(T ext);
-
-    /**
-     * For run configurations. Is called late afterEvaluate or at runtime.
-     *
-     * @param ext the Extension object
-     * @return empty list for no arguments. NEVER NULL.
-     */
-    protected abstract List<String> getServerRunArgs(T ext);
-
-    /**
-     * For run configurations. Is called late afterEvaluate or at runtime.
-     *
-     * @param ext the Extension object
-     * @return empty list for no arguments. NEVER NULL.
-     */
-    protected abstract List<String> getServerJvmArgs(T ext);
-
-    /**
-     * Configures the eclipse classpath
-     * Also creates task that generate the eclipse run configs and attaches them to the eclipse task.
-     */
-    protected void configureEclipse() {
-        EclipseModel eclipseConv = (EclipseModel) project.getExtensions().getByName("eclipse");
-        eclipseConv.getClasspath().getPlusConfigurations().add(project.getConfigurations().getByName(CONFIG_MC));
-        eclipseConv.getClasspath().getPlusConfigurations().add(project.getConfigurations().getByName(CONFIG_MC_DEPS));
-        eclipseConv.getClasspath().getPlusConfigurations().add(project.getConfigurations().getByName(CONFIG_START));
-        eclipseConv.getClasspath().getPlusConfigurations().add(project.getConfigurations().getByName(CONFIG_PROVIDED));
-
-        if (this.hasClientRun()) {
-            GenEclipseRunTask eclipseClient = makeTask("makeEclipseCleanRunClient", GenEclipseRunTask.class);
-            eclipseClient.setMainClass(GRADLE_START_CLIENT);
-            eclipseClient.setProjectName(project.getName());
-            eclipseClient.setOutputFile(project.file(project.getName() + "_Client.launch"));
-            eclipseClient.setRunDir(delayedFile(REPLACE_RUN_DIR));
-            eclipseClient.dependsOn(TASK_MAKE_START);
-            eclipseClient.doFirst(makeRunDir);
-
-            project.getTasks().getByName("eclipse").dependsOn(eclipseClient);
-            project.getTasks().getByName("cleanEclipse").dependsOn("cleanMakeEclipseCleanRunClient");
-        }
-
-        if (this.hasServerRun()) {
-            GenEclipseRunTask eclipseServer = makeTask("makeEclipseCleanRunServer", GenEclipseRunTask.class);
-            eclipseServer.setMainClass(GRADLE_START_SERVER);
-            eclipseServer.setProjectName(project.getName());
-            eclipseServer.setOutputFile(project.file(project.getName() + "_Server.launch"));
-            eclipseServer.setRunDir(delayedFile(REPLACE_RUN_DIR));
-            eclipseServer.dependsOn(TASK_MAKE_START);
-            eclipseServer.doFirst(makeRunDir);
-
-            project.getTasks().getByName("eclipse").dependsOn(eclipseServer);
-            project.getTasks().getByName("cleanEclipse").dependsOn("cleanMakeEclipseCleanRunServer");
-        }
-
-        project.afterEvaluate(new Action<Project>() {
-
-            @Override
-            public void execute(Project project) {
-                if (project.getState().getFailure() != null)
-                    return;
-
-                T ext = getExtension();
-                if (hasClientRun()) {
-                    GenEclipseRunTask task = ((GenEclipseRunTask) project.getTasks().getByName("makeEclipseCleanRunClient"));
-                    task.setArguments(Joiner.on(' ').join(getClientRunArgs(ext)));
-                    task.setJvmArguments(Joiner.on(' ').join(getClientJvmArgs(ext)));
-                }
-                if (hasServerRun()) {
-                    GenEclipseRunTask task = ((GenEclipseRunTask) project.getTasks().getByName("makeEclipseCleanRunServer"));
-                    task.setArguments(Joiner.on(' ').join(getServerRunArgs(ext)));
-                    task.setJvmArguments(Joiner.on(' ').join(getServerJvmArgs(ext)));
-                }
-            }
-
-        });
-
-        // other dependencies
-        project.getTasks().getByName("eclipseClasspath").dependsOn(TASK_DD_COMPILE, TASK_DD_PROVIDED);
-    }
-
-    /**
      * Adds the intellij run configs and makes a few other tweaks to the intellij project creation
      */
-    @SuppressWarnings("serial")
-    protected void configureIntellij() {
+    protected void configureIdea() {
         IdeaModel ideaConv = (IdeaModel) project.getExtensions().getByName("idea");
 
         ideaConv.getModule().getExcludeDirs().addAll(project.files(".gradle", "build", ".idea", "out").getFiles());
@@ -1161,26 +987,16 @@ public abstract class UserBasePlugin<T extends UserBaseExtension> extends BasePl
 
         String[][] config = new String[][]
                 {
-                        this.hasClientRun() ? new String[]
+                        new String[]
                                 {
                                         "Minecraft Client",
                                         GRADLE_START_CLIENT,
                                         Joiner.on(' ').join(getClientRunArgs(ext)),
                                         Joiner.on(' ').join(getClientJvmArgs(ext))
-                                } : null,
-
-                        this.hasServerRun() ? new String[]
-                                {
-                                        "Minecraft Server",
-                                        GRADLE_START_SERVER,
-                                        Joiner.on(' ').join(getServerRunArgs(ext)),
-                                        Joiner.on(' ').join(getServerJvmArgs(ext))
-                                } : null
+                                }
                 };
 
         for (String[] data : config) {
-            if (data == null)
-                continue;
 
             Element child = addXml(root, "configuration", ImmutableMap.of(
                     "name", data[0],

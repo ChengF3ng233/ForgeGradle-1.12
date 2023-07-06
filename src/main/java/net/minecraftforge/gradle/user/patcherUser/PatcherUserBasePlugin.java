@@ -187,7 +187,7 @@ public abstract class PatcherUserBasePlugin<T extends UserBaseExtension> extends
     }
 
     @Override
-    protected void afterDecomp(final boolean isDecomp, final boolean useLocalCache, final String mcConfig)
+    protected void afterDecomp(final boolean useLocalCache)
     {
         // add MC repo to all projects
         project.allprojects(new Action<Project>() {
@@ -201,7 +201,7 @@ public abstract class PatcherUserBasePlugin<T extends UserBaseExtension> extends
         // add the Mc dep
         T exten = getExtension();
         String group = getApiGroup(exten);
-        String artifact = getApiName(exten) + (isDecomp ? "Src" : "Bin");
+        String artifact = getApiName(exten) + (false ? "Src" : "Bin");
         String version = getApiVersion(exten) + (useLocalCache ? "-PROJECT(" + project.getName() + ")" : "");
 
         project.getDependencies().add(CONFIG_MC, ImmutableMap.of("group", group, "name", artifact, "version", version));
@@ -222,9 +222,4 @@ public abstract class PatcherUserBasePlugin<T extends UserBaseExtension> extends
     public abstract String getUserdevClassifier(T ext);
 
     public abstract String getUserdevExtension(T ext);
-
-    //@formatter:off
-    @Override protected boolean hasServerRun() { return true; }
-    @Override protected boolean hasClientRun() { return true; }
-    //@formatter:on
 }

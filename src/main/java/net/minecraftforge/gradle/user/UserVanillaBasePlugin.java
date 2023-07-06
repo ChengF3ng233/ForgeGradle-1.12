@@ -62,7 +62,7 @@ public abstract class UserVanillaBasePlugin<T extends UserBaseExtension> extends
     protected abstract void applyVanillaUserPlugin();
 
     @Override
-    protected void afterDecomp(final boolean isDecomp, final boolean useLocalCache, final String mcConfig)
+    protected void afterDecomp(final boolean useLocalCache)
     {
         // add MC repo to all projects
         project.allprojects(new Action<Project>() {
@@ -76,7 +76,7 @@ public abstract class UserVanillaBasePlugin<T extends UserBaseExtension> extends
 
         // add the Mc dep
         String group = "net.minecraft";
-        String artifact = getJarName() + (isDecomp ? "Src" : "Bin");
+        String artifact = getJarName() + (false ? "Src" : "Bin");
         String version = delayedString(REPLACE_MC_VERSION).call() + (useLocalCache ? "-PROJECT(" + project.getName() + ")" : "");
 
         project.getDependencies().add(CONFIG_MC, ImmutableMap.of("group", group, "name", artifact, "version", version));
@@ -120,13 +120,6 @@ public abstract class UserVanillaBasePlugin<T extends UserBaseExtension> extends
     protected List<String> getClientRunArgs(T ext)
     {
         List<String> out = ext.getResolvedClientRunArgs();
-        return out;
-    }
-
-    @Override
-    protected List<String> getServerRunArgs(T ext)
-    {
-        List<String> out = ext.getResolvedServerRunArgs();
         return out;
     }
 }
