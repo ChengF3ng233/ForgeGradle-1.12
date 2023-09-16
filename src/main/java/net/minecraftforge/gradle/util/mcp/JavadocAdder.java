@@ -85,12 +85,12 @@ public final class JavadocAdder {
 
         // return text if len is zero or less
         if (len <= 0) {
-            return new ArrayList<String>(List.of(text));
+            return new ArrayList<String>(Arrays.asList(text));
         }
 
         // return text if less than length
         if (text.length() <= len) {
-            return new ArrayList<String>(List.of(text));
+            return new ArrayList<String>(Arrays.asList(text));
         }
 
         List<String> lines = new LinkedList<String>();
