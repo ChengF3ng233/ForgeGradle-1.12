@@ -20,10 +20,16 @@
  */
 package net.minecraftforge.gradle.patcher;
 
-import static net.minecraftforge.gradle.common.Constants.addXml;
-
-import java.io.File;
-import java.io.IOException;
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
+import net.minecraftforge.gradle.common.Constants;
+import org.gradle.api.DefaultTask;
+import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.Optional;
+import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.TaskAction;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -33,38 +39,36 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import java.io.File;
+import java.io.IOException;
 
-import net.minecraftforge.gradle.common.Constants;
+import static net.minecraftforge.gradle.common.Constants.addXml;
 
-import org.gradle.api.DefaultTask;
-import org.gradle.api.tasks.Input;
-import org.gradle.api.tasks.Optional;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-
-import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableMap;
-
-class TaskGenIdeaRun extends DefaultTask
-{
+class TaskGenIdeaRun extends DefaultTask {
     //@formatter:off
-    @Input           private Object configName;
-    @Input           private Object projectName;
-    @Input           private Object mainClass;
-    @Input           private Object runDir;
-    @Input @Optional private Object arguments;
-    @OutputFile      private Object outputFile;
+    @Input
+    private Object configName;
+    @Input
+    private Object projectName;
+    @Input
+    private Object mainClass;
+    @Input
+    private Object runDir;
+    @Input
+    @Optional
+    private Object arguments;
+    @OutputFile
+    private Object outputFile;
     //@formatter:on
 
     //@formatter:off
-    public TaskGenIdeaRun() { super(); }
+    public TaskGenIdeaRun() {
+        super();
+    }
     //@formatter:on
 
     @TaskAction
-    public void doTask() throws IOException, ParserConfigurationException, TransformerException
-    {
+    public void doTask() throws IOException, ParserConfigurationException, TransformerException {
         DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
 
@@ -81,8 +85,7 @@ class TaskGenIdeaRun extends DefaultTask
         addXml(root, "option", ImmutableMap.of("name", "MAIN_CLASS_NAME", "value", getMainClass()));
         addXml(root, "option", ImmutableMap.of("name", "WORKING_DIRECTORY", "value", getRunDir()));
 
-        if (!Strings.isNullOrEmpty(getArguments()))
-        {
+        if (!Strings.isNullOrEmpty(getArguments())) {
             addXml(root, "option", ImmutableMap.of("name", "PROGRAM_PARAMETERS", "value", getArguments()));
         }
 
@@ -97,63 +100,51 @@ class TaskGenIdeaRun extends DefaultTask
         transformer.transform(source, result);
     }
 
-    public String getProjectName()
-    {
+    public String getProjectName() {
         return Constants.resolveString(projectName);
     }
 
-    public void setProjectName(Object projectName)
-    {
+    public void setProjectName(Object projectName) {
         this.projectName = projectName;
     }
-    
-    public String getConfigName()
-    {
+
+    public String getConfigName() {
         return Constants.resolveString(configName);
     }
 
-    public void setConfigName(Object configName)
-    {
+    public void setConfigName(Object configName) {
         this.configName = configName;
     }
 
-    public String getArguments()
-    {
+    public String getArguments() {
         return Constants.resolveString(arguments);
     }
 
-    public void setArguments(Object arguments)
-    {
+    public void setArguments(Object arguments) {
         this.arguments = arguments;
     }
 
-    public String getRunDir()
-    {
+    public String getRunDir() {
         return Constants.resolveString(runDir);
     }
 
-    public void setRunDir(Object runDir)
-    {
+    public void setRunDir(Object runDir) {
         this.runDir = runDir;
     }
 
-    public File getOutputFile()
-    {
+    public File getOutputFile() {
         return getProject().file(outputFile);
     }
 
-    public void setOutputFile(Object outputFile)
-    {
+    public void setOutputFile(Object outputFile) {
         this.outputFile = outputFile;
     }
 
-    public String getMainClass()
-    {
+    public String getMainClass() {
         return Constants.resolveString(mainClass);
     }
 
-    public void setMainClass(Object mainClass)
-    {
+    public void setMainClass(Object mainClass) {
         this.mainClass = mainClass;
     }
 }

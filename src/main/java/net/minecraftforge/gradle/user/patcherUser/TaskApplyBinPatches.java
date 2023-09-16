@@ -20,13 +20,24 @@
  */
 package net.minecraftforge.gradle.user.patcherUser;
 
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import cn.feng.util.CustomPack200;
+import com.google.common.base.Joiner;
+import com.google.common.collect.Maps;
+import com.google.common.io.ByteArrayDataInput;
+import com.google.common.io.ByteStreams;
+import com.nothome.delta.GDiffPatcher;
+import lzma.sdk.lzma.Decoder;
+import lzma.streams.LzmaInputStream;
+import net.minecraftforge.gradle.util.caching.Cached;
+import net.minecraftforge.gradle.util.caching.CachedTask;
+import org.gradle.api.file.FileVisitDetails;
+import org.gradle.api.file.FileVisitor;
+import org.gradle.api.tasks.InputFile;
+import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.TaskAction;
+
+import java.io.*;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,53 +45,30 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 import java.util.regex.Pattern;
-import java.util.zip.Adler32;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
+import java.util.zip.*;
 
-import cn.feng.util.Pack200;
-import org.gradle.api.file.FileVisitDetails;
-import org.gradle.api.file.FileVisitor;
-import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
-
-import com.google.common.base.Joiner;
-import com.google.common.collect.Maps;
-import com.google.common.io.ByteArrayDataInput;
-import com.google.common.io.ByteStreams;
-import com.nothome.delta.GDiffPatcher;
-
-import lzma.sdk.lzma.Decoder;
-import lzma.streams.LzmaInputStream;
-import net.minecraftforge.gradle.util.caching.Cached;
-import net.minecraftforge.gradle.util.caching.CachedTask;
-
-public class TaskApplyBinPatches extends CachedTask
-{
+public class TaskApplyBinPatches extends CachedTask {
     //@formatter:off
-    @InputFile  Object inJar;
-                Object classesJar;
-                Object resourcesJar;
-    @InputFile  Object patches;
+    @InputFile
+    Object inJar;
+    Object classesJar;
+    Object resourcesJar;
+    @InputFile
+    Object patches;
     //@formatter:on
 
     @OutputFile
     @Cached
-    Object                              outJar;
+    Object outJar;
 
-    private HashMap<String, ClassPatch> patchlist = Maps.newHashMap();
-    private GDiffPatcher                patcher   = new GDiffPatcher();
+    private final HashMap<String, ClassPatch> patchlist = Maps.newHashMap();
+    private final GDiffPatcher patcher = new GDiffPatcher();
 
     @TaskAction
-    public void doTask() throws IOException
-    {
+    public void doTask() throws IOException {
         setup();
 
-        if (getOutJar().exists())
-        {
+        if (getOutJar().exists()) {
             getOutJar().delete();
         }
 
@@ -88,21 +76,16 @@ public class TaskApplyBinPatches extends CachedTask
 
         try (ZipFile in = new ZipFile(getInJar());
              ZipInputStream classesIn = new ZipInputStream(new FileInputStream(getClassJar()));
-             ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(getOutJar()))))
-        {
+             ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(getOutJar())))) {
             // DO PATCHES
             log("Patching Class:");
-            for (ZipEntry e : Collections.list(in.entries()))
-            {
+            for (ZipEntry e : Collections.list(in.entries())) {
                 if (e.getName().contains("META-INF"))
                     continue;
 
-                if (e.isDirectory())
-                {
+                if (e.isDirectory()) {
                     out.putNextEntry(e);
-                }
-                else
-                {
+                } else {
                     ZipEntry n = new ZipEntry(e.getName());
                     n.setTime(e.getTime());
                     out.putNextEntry(n);
@@ -110,16 +93,13 @@ public class TaskApplyBinPatches extends CachedTask
                     byte[] data = ByteStreams.toByteArray(in.getInputStream(e));
                     ClassPatch patch = patchlist.get(e.getName().replace('\\', '/'));
 
-                    if (patch != null)
-                    {
+                    if (patch != null) {
                         log("\t%s (%s) (input size %d)", patch.targetClassName, patch.sourceClassName, data.length);
                         int inputChecksum = adlerHash(data);
-                        if (patch.inputChecksum != inputChecksum)
-                        {
+                        if (patch.inputChecksum != inputChecksum) {
                             throw new RuntimeException(String.format("There is a binary discrepency between the expected input class %s (%s) and the actual class. Checksum on disk is %x, in patch %x. Things are probably about to go very wrong. Did you put something into the jar file?", patch.targetClassName, patch.sourceClassName, inputChecksum, patch.inputChecksum));
                         }
-                        synchronized (patcher)
-                        {
+                        synchronized (patcher) {
                             data = patcher.patch(data, patch.patch);
                         }
                     }
@@ -133,8 +113,7 @@ public class TaskApplyBinPatches extends CachedTask
 
             // COPY DATA
             ZipEntry entry = null;
-            while ((entry = classesIn.getNextEntry()) != null)
-            {
+            while ((entry = classesIn.getNextEntry()) != null) {
                 if (entries.contains(entry.getName()))
                     continue;
 
@@ -143,30 +122,23 @@ public class TaskApplyBinPatches extends CachedTask
                 entries.add(entry.getName());
             }
 
-            getProject().zipTree(getResourceJar()).visit(new FileVisitor()
-            {
+            getProject().zipTree(getResourceJar()).visit(new FileVisitor() {
                 @Override
-                public void visitDir(FileVisitDetails dirDetails)
-                {
+                public void visitDir(FileVisitDetails dirDetails) {
                 }
 
                 @Override
-                public void visitFile(FileVisitDetails file)
-                {
-                    try
-                    {
+                public void visitFile(FileVisitDetails file) {
+                    try {
                         String name = file.getRelativePath().toString().replace('\\', '/');
-                        if (!entries.contains(name))
-                        {
+                        if (!entries.contains(name)) {
                             ZipEntry n = new ZipEntry(name);
                             n.setTime(file.getLastModified());
                             out.putNextEntry(n);
                             ByteStreams.copy(file.open(), out);
                             entries.add(name);
                         }
-                    }
-                    catch (IOException e)
-                    {
+                    } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 }
@@ -175,61 +147,48 @@ public class TaskApplyBinPatches extends CachedTask
         }
     }
 
-    private int adlerHash(byte[] input)
-    {
+    private int adlerHash(byte[] input) {
         Adler32 hasher = new Adler32();
         hasher.update(input);
         return (int) hasher.getValue();
     }
 
-    public void setup()
-    {
+    public void setup() {
         Pattern matcher = Pattern.compile("binpatch/merged/.*.binpatch");
 
         byte[] bytes;
-        try (ByteArrayOutputStream jarBytes = new ByteArrayOutputStream())
-        {
-            try (LzmaInputStream binpatchesDecompressed = new LzmaInputStream(new FileInputStream(getPatches()), new Decoder());
-                 JarOutputStream jos = new JarOutputStream(jarBytes))
-            {
-                Pack200.newUnpacker().unpack(binpatchesDecompressed, jos);
+        try (ByteArrayOutputStream jarBytes = new ByteArrayOutputStream()) {
+            try (LzmaInputStream binpatchesDecompressed = new LzmaInputStream(Files.newInputStream(getPatches().toPath()), new Decoder());
+                 JarOutputStream jos = new JarOutputStream(jarBytes)) {
+                CustomPack200.newUnpacker().unpack(binpatchesDecompressed, jos);
             }
             bytes = jarBytes.toByteArray();
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         log("Reading Patches:");
-        try (JarInputStream jis = new JarInputStream(new ByteArrayInputStream(bytes)))
-        {
-            do
-            {
+        try (JarInputStream jis = new JarInputStream(new ByteArrayInputStream(bytes))) {
+            do {
                 JarEntry entry = jis.getNextJarEntry();
-                if (entry == null)
-                {
+                if (entry == null) {
                     break;
                 }
 
-                if (matcher.matcher(entry.getName()).matches())
-                {
+                if (matcher.matcher(entry.getName()).matches()) {
                     ClassPatch cp = readPatch(entry, jis);
                     patchlist.put(cp.sourceClassName.replace('.', '/') + ".class", cp);
                 }
                 jis.closeEntry();
             } while (true);
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
         log("Read %d binary patches", patchlist.size());
         log("Patch list :\n\t%s", Joiner.on("\n\t").join(patchlist.entrySet()));
     }
 
-    private ClassPatch readPatch(JarEntry patchEntry, JarInputStream jis) throws IOException
-    {
+    private ClassPatch readPatch(JarEntry patchEntry, JarInputStream jis) throws IOException {
         log("\t%s", patchEntry.getName());
         ByteArrayDataInput input = ByteStreams.newDataInput(ByteStreams.toByteArray(jis));
 
@@ -238,8 +197,7 @@ public class TaskApplyBinPatches extends CachedTask
         String targetClassName = input.readUTF();
         boolean exists = input.readBoolean();
         int inputChecksum = 0;
-        if (exists)
-        {
+        if (exists) {
             inputChecksum = input.readInt();
         }
         int patchLength = input.readInt();
@@ -249,74 +207,61 @@ public class TaskApplyBinPatches extends CachedTask
         return new ClassPatch(name, sourceClassName, targetClassName, exists, inputChecksum, patchBytes);
     }
 
-    private void log(String format, Object... args)
-    {
+    private void log(String format, Object... args) {
         getLogger().debug(String.format(format, args));
     }
 
-    public File getInJar()
-    {
+    public File getInJar() {
         return getProject().file(inJar);
     }
 
-    public void setInJar(Object inJar)
-    {
+    public void setInJar(Object inJar) {
         this.inJar = inJar;
     }
 
-    public File getOutJar()
-    {
+    public File getOutJar() {
         return getProject().file(outJar);
     }
 
-    public void setOutJar(Object outJar)
-    {
+    public void setOutJar(Object outJar) {
         this.outJar = outJar;
     }
 
-    public File getPatches()
-    {
+    public File getPatches() {
         return getProject().file(patches);
     }
 
-    public void setPatches(Object patchesJar)
-    {
+    public void setPatches(Object patchesJar) {
         this.patches = patchesJar;
     }
 
     @InputFile
-    public File getClassJar()
-    {
+    public File getClassJar() {
         return getProject().file(classesJar);
     }
 
-    public void setClassJar(Object extraJar)
-    {
+    public void setClassJar(Object extraJar) {
         this.classesJar = extraJar;
     }
 
     @InputFile
-    public File getResourceJar()
-    {
+    public File getResourceJar() {
         return getProject().file(resourcesJar);
     }
 
-    public void setResourceJar(Object resources)
-    {
+    public void setResourceJar(Object resources) {
         this.resourcesJar = resources;
     }
 
-    public static class ClassPatch
-    {
-        public final String  name;
-        public final String  sourceClassName;
-        public final String  targetClassName;
+    public static class ClassPatch {
+        public final String name;
+        public final String sourceClassName;
+        public final String targetClassName;
         public final boolean existsAtTarget;
-        public final byte[]  patch;
-        public final int     inputChecksum;
+        public final byte[] patch;
+        public final int inputChecksum;
 
-        public ClassPatch(String name, String sourceClassName, String targetClassName, boolean existsAtTarget, int inputChecksum, byte[] patch)
-        {
+        public ClassPatch(String name, String sourceClassName, String targetClassName, boolean existsAtTarget, int inputChecksum, byte[] patch) {
             this.name = name;
             this.sourceClassName = sourceClassName;
             this.targetClassName = targetClassName;
@@ -326,8 +271,7 @@ public class TaskApplyBinPatches extends CachedTask
         }
 
         @Override
-        public String toString()
-        {
+        public String toString() {
             return String.format("%s : %s => %s (%b) size %d", name, sourceClassName, targetClassName, existsAtTarget, patch.length);
         }
     }

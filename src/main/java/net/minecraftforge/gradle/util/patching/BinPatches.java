@@ -24,18 +24,15 @@ import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
 import com.nothome.delta.Delta;
 
-import java.io.*;
-import java.util.zip.*;
+import java.io.IOException;
+import java.util.zip.Adler32;
 
-public class BinPatches
-{
-    private BinPatches()
-    {
+public class BinPatches {
+    private BinPatches() {
         throw new RuntimeException("Utility class should not be instantiated");
     }
 
-    public static byte[] getBinPatchBytesWithHeader(Delta delta, String cleanName, String srgName, byte[] clean, byte[] dirty) throws IOException
-    {
+    public static byte[] getBinPatchBytesWithHeader(Delta delta, String cleanName, String srgName, byte[] clean, byte[] dirty) throws IOException {
         byte[] diff = delta.compute(clean == null ? new byte[0] : clean, dirty);
 
         ByteArrayDataOutput out = ByteStreams.newDataOutput(diff.length + 50);
@@ -43,8 +40,7 @@ public class BinPatches
         out.writeUTF(cleanName.replace('/', '.')); // Source Notch name
         out.writeUTF(srgName.replace('/', '.')); // Source SRG Name
         out.writeBoolean(clean != null);    // Exists in Clean
-        if (clean != null)
-        {
+        if (clean != null) {
             out.writeInt(adlerHash(clean)); // Hash of Clean file
         }
         out.writeInt(diff.length); // Patch length
@@ -52,8 +48,7 @@ public class BinPatches
         return out.toByteArray();
     }
 
-    private static int adlerHash(byte[] input)
-    {
+    private static int adlerHash(byte[] input) {
         Adler32 hasher = new Adler32();
         hasher.update(input);
         return (int) hasher.getValue();

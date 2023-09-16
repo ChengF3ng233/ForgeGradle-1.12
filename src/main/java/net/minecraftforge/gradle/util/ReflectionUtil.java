@@ -25,8 +25,7 @@ import org.gradle.api.invocation.Gradle;
 
 import java.lang.reflect.InvocationTargetException;
 
-public class ReflectionUtil
-{
+public class ReflectionUtil {
     public static Object callMethod(Object self, String method) {
         try {
             return self.getClass().getMethod(method).invoke(self);
@@ -45,6 +44,6 @@ public class ReflectionUtil
 
     public static Settings getSettingsOrNull(Gradle gradle) {
         return ReflectionUtil.callMethodOrNullWithReturnType(gradle,
-                        "getSettings", Settings.class);
+                "getSettings", Settings.class);
     }
 }

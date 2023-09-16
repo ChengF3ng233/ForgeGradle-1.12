@@ -20,29 +20,28 @@
  */
 package net.minecraftforge.gradle.tasks;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import org.gradle.api.DefaultTask;
-import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Maps;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
 import net.minecraftforge.gradle.util.AnnotationUtils;
 import net.minecraftforge.gradle.util.AnnotationUtils.ASMInfo;
 import net.minecraftforge.gradle.util.AnnotationUtils.Annotation;
+import org.gradle.api.DefaultTask;
+import org.gradle.api.tasks.InputFile;
+import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.TaskAction;
 
-public class TaskExtractAnnotationsText extends DefaultTask
-{
+import java.io.File;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+public class TaskExtractAnnotationsText extends DefaultTask {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     @InputFile
@@ -50,64 +49,51 @@ public class TaskExtractAnnotationsText extends DefaultTask
     @OutputFile
     private Object output;
 
-    public File getJar()
-    {
+    public File getJar() {
         return getProject().file(jar);
     }
 
-    public void setJar(Object jar)
-    {
+    public void setJar(Object jar) {
         this.jar = jar;
     }
 
-    public File getOutput()
-    {
+    public File getOutput() {
         return getProject().file(output);
     }
 
-    public void setOutput(Object output)
-    {
+    public void setOutput(Object output) {
         this.output = output;
     }
 
-    public TaskExtractAnnotationsText()
-    {
+    public TaskExtractAnnotationsText() {
         //this.getOutputs().upToDateWhen(Constants.CALL_FALSE);
     }
 
     @TaskAction
-    public void doTask() throws IOException
-    {
+    public void doTask() throws IOException {
         File input = getJar();
 
         Map<String, ASMInfo> asm_info = Maps.newTreeMap(); //Tree map because I like sorted outputs.
         //Map<String, Integer> class_versions = Maps.newTreeMap();
 
-        try (ZipFile in = new ZipFile(input))
-        {
-            for (ZipEntry e : Collections.list(in.entries()))
-            {
+        try (ZipFile in = new ZipFile(input)) {
+            for (ZipEntry e : Collections.list(in.entries())) {
                 if (e.isDirectory())
                     continue;
 
                 // correct source name
-                if (e.getName().endsWith(".class"))
-                {
-                  if (e.getName().endsWith("$.class")) //Scala synthetic class, skip
-                    continue;
+                if (e.getName().endsWith(".class")) {
+                    if (e.getName().endsWith("$.class")) //Scala synthetic class, skip
+                        continue;
                     byte[] data = ByteStreams.toByteArray(in.getInputStream(e));
                     ASMInfo info = AnnotationUtils.processClass(data);
-                    if (info != null)
-                    {
+                    if (info != null) {
                         String name = e.getName().substring(0, e.getName().length() - 6);
                         //class_versions.put(name, info.version);
                         info.version = null;
-                        if (info.annotations != null)
-                        {
-                            for (Annotation anno : info.annotations)
-                            {
-                                if (anno.values != null && anno.values.size() == 1 && anno.values.containsKey("value"))
-                                {
+                        if (info.annotations != null) {
+                            for (Annotation anno : info.annotations) {
+                                if (anno.values != null && anno.values.size() == 1 && anno.values.containsKey("value")) {
                                     anno.value = anno.values.get("value");
                                     anno.values = null;
                                 }

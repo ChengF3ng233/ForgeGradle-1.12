@@ -20,6 +20,17 @@
  */
 package net.minecraftforge.gradle.user;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Sets;
+import com.google.common.io.Files;
+import net.minecraftforge.gradle.tasks.CreateStartTask;
+import net.minecraftforge.gradle.util.caching.Cached;
+import net.minecraftforge.gradle.util.caching.CachedTask;
+import org.gradle.api.AntBuilder;
+import org.gradle.api.file.FileVisitDetails;
+import org.gradle.api.file.FileVisitor;
+import org.gradle.api.tasks.*;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -30,25 +41,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-import net.minecraftforge.gradle.tasks.CreateStartTask;
-import net.minecraftforge.gradle.util.caching.Cached;
-import net.minecraftforge.gradle.util.caching.CachedTask;
-
-import org.gradle.api.AntBuilder;
-import org.gradle.api.file.FileVisitDetails;
-import org.gradle.api.file.FileVisitor;
-import org.gradle.api.tasks.Input;
-import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.Optional;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
-
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
-import com.google.common.io.Files;
-
-public class TaskRecompileMc extends CachedTask
-{
+public class TaskRecompileMc extends CachedTask {
     @InputFile
     private Object inSources;
 
@@ -64,8 +57,7 @@ public class TaskRecompileMc extends CachedTask
     private Object outJar;
 
     @TaskAction
-    public void doStuff() throws IOException
-    {
+    public void doStuff() throws IOException {
         File inJar = getInSources();
         File tempSrc = new File(getTemporaryDir(), "sources");
         File tempCls = new File(getTemporaryDir(), "compiled");
@@ -83,26 +75,25 @@ public class TaskRecompileMc extends CachedTask
         getExtPath();
         // recompile
         ant.invokeMethod("javac",
-            ImmutableMap.builder()
-                .put("srcDir", tempSrc.getCanonicalPath())
-                .put("destDir", tempCls.getCanonicalPath())
-                .put("failonerror", true)
-                .put("includeantruntime", false)
-                .put("classpath", getProject().getConfigurations().getByName(classpath).getAsPath())
-                .put("encoding", "utf-8")
-                .put("source", "1.8")
-                .put("target", "1.8")
-                .put("debug", "true")
-                //.put("Djava.ext.dirs", )
-                .build()
+                ImmutableMap.builder()
+                        .put("srcDir", tempSrc.getCanonicalPath())
+                        .put("destDir", tempCls.getCanonicalPath())
+                        .put("failonerror", true)
+                        .put("includeantruntime", false)
+                        .put("classpath", getProject().getConfigurations().getByName(classpath).getAsPath())
+                        .put("encoding", "utf-8")
+                        .put("source", "1.8")
+                        .put("target", "1.8")
+                        .put("debug", "true")
+                        //.put("Djava.ext.dirs", )
+                        .build()
         );
 
         outJar.getParentFile().mkdirs();
         createOutput(outJar, inJar, tempCls, getInResources());
     }
 
-    private static String getExtPath()
-    {
+    private static String getExtPath() {
         String currentExtDirs = System.getProperty("java.ext.dirs");
         String newExtDirs = "";
         String[] parts = currentExtDirs.split(File.pathSeparator);
@@ -121,14 +112,11 @@ public class TaskRecompileMc extends CachedTask
         return newExtDirs;
     }
 
-    private static void extractSources(File tempDir, File inJar) throws IOException
-    {
-        try (ZipInputStream zin = new ZipInputStream(new FileInputStream(inJar)))
-        {
+    private static void extractSources(File tempDir, File inJar) throws IOException {
+        try (ZipInputStream zin = new ZipInputStream(new FileInputStream(inJar))) {
             ZipEntry entry;
 
-            while ((entry = zin.getNextEntry()) != null)
-            {
+            while ((entry = zin.getNextEntry()) != null) {
                 // we dont care about directories.. we can make em later when needed
                 // we only want java files to compile too, can grab the other resources from the jar later
                 if (entry.isDirectory() || !entry.getName().endsWith(".java"))
@@ -141,8 +129,7 @@ public class TaskRecompileMc extends CachedTask
         }
     }
 
-    private void createOutput(File outJar, File sourceJar, File classDir, File resourceJar) throws IOException
-    {
+    private void createOutput(File outJar, File sourceJar, File classDir, File resourceJar) throws IOException {
         Set<String> elementsAdded = Sets.newHashSet();
 
         // make output
@@ -151,8 +138,7 @@ public class TaskRecompileMc extends CachedTask
         Visitor visitor = new Visitor(zout, elementsAdded);
 
         // custom resources should override existing ones, so resources first.
-        if (resourceJar != null)
-        {
+        if (resourceJar != null) {
             getProject().zipTree(resourceJar).visit(visitor);
         }
 
@@ -162,22 +148,18 @@ public class TaskRecompileMc extends CachedTask
         zout.close();
     }
 
-    private static final class Visitor implements FileVisitor
-    {
+    private static final class Visitor implements FileVisitor {
         private final ZipOutputStream zout;
-        private final Set<String>     entries;
+        private final Set<String> entries;
 
-        public Visitor(ZipOutputStream zout, Set<String> entries)
-        {
+        public Visitor(ZipOutputStream zout, Set<String> entries) {
             this.zout = zout;
             this.entries = entries;
         }
 
         @Override
-        public void visitDir(FileVisitDetails dir)
-        {
-            try
-            {
+        public void visitDir(FileVisitDetails dir) {
+            try {
                 String name = dir.getRelativePath().toString().replace('\\', '/');
                 if (!name.endsWith("/"))
                     name += "/";
@@ -188,18 +170,14 @@ public class TaskRecompileMc extends CachedTask
                 entries.add(name);
                 ZipEntry entry = new ZipEntry(name);
                 zout.putNextEntry(entry);
-            }
-            catch (IOException e)
-            {
+            } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
 
         @Override
-        public void visitFile(FileVisitDetails file)
-        {
-            try
-            {
+        public void visitFile(FileVisitDetails file) {
+            try {
                 String name = file.getRelativePath().toString().replace('\\', '/');
 
                 if (entries.contains(name) || name.endsWith(".java"))
@@ -209,54 +187,44 @@ public class TaskRecompileMc extends CachedTask
                 zout.putNextEntry(new ZipEntry(name));
 
                 file.copyTo(zout);
-            }
-            catch (IOException e)
-            {
+            } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
     }
 
-    public File getInSources()
-    {
+    public File getInSources() {
         return getProject().file(inSources);
     }
 
-    public void setInSources(Object inSources)
-    {
+    public void setInSources(Object inSources) {
         this.inSources = inSources;
     }
 
-    public File getInResources()
-    {
+    public File getInResources() {
         if (inResources == null)
             return null;
         else
             return getProject().file(inResources);
     }
 
-    public void setInResources(Object inResources)
-    {
+    public void setInResources(Object inResources) {
         this.inResources = inResources;
     }
 
-    public String getClasspath()
-    {
+    public String getClasspath() {
         return classpath;
     }
 
-    public void setClasspath(String classpath)
-    {
+    public void setClasspath(String classpath) {
         this.classpath = classpath;
     }
 
-    public File getOutJar()
-    {
+    public File getOutJar() {
         return getProject().file(outJar);
     }
 
-    public void setOutJar(Object outJar)
-    {
+    public void setOutJar(Object outJar) {
         this.outJar = outJar;
     }
 }

@@ -20,23 +20,21 @@
  */
 package net.minecraftforge.gradle.tasks;
 
+import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import com.google.common.io.Files;
+import com.google.common.io.Resources;
 import groovy.lang.Closure;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Set;
-
 import net.minecraftforge.gradle.common.Constants;
 import net.minecraftforge.gradle.util.caching.Cached;
 import net.minecraftforge.gradle.util.caching.CachedTask;
-
 import org.gradle.api.AntBuilder;
-import org.gradle.api.Task;
 import org.gradle.api.AntBuilder.AntMessagePriority;
+import org.gradle.api.Task;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileVisitDetails;
 import org.gradle.api.file.FileVisitor;
@@ -47,38 +45,34 @@ import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.util.GradleVersion;
 
-import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.google.common.io.Files;
-import com.google.common.io.Resources;
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.Set;
 
-public class CreateStartTask extends CachedTask
-{
-    HashMap<String, String>     resources    = Maps.newHashMap();
+public class CreateStartTask extends CachedTask {
+    HashMap<String, String> resources = Maps.newHashMap();
 
-    HashMap<String, Object>     replacements = Maps.newHashMap();
+    HashMap<String, Object> replacements = Maps.newHashMap();
 
-    List<String>                extraLines   = Lists.newArrayList();
+    List<String> extraLines = Lists.newArrayList();
 
     @Cached
     @OutputDirectory
-    private Object              startOut;
+    private Object startOut;
 
-    private Set<String>         classpath    = Sets.newHashSet();
-    private boolean             compile;
+    private final Set<String> classpath = Sets.newHashSet();
+    private boolean compile;
 
-    private static final String EXTRA_LINES  = "//@@EXTRALINES@@";
+    private static final String EXTRA_LINES = "//@@EXTRALINES@@";
 
     @TaskAction
-    public void doStuff() throws IOException
-    {
+    public void doStuff() throws IOException {
         // resolve the replacements
-        for (Entry<String, Object> entry : replacements.entrySet())
-        {
+        for (Entry<String, Object> entry : replacements.entrySet()) {
             replacements.put(entry.getKey(), resolveString(entry.getValue()));
         }
 
@@ -86,17 +80,14 @@ public class CreateStartTask extends CachedTask
         File resourceDir = compile ? new File(getTemporaryDir(), "extracted") : getStartOut();
 
         // replace and extract
-        for (Entry<String, String> resEntry : resources.entrySet())
-        {
+        for (Entry<String, String> resEntry : resources.entrySet()) {
             String out = resEntry.getValue();
-            for (Entry<String, Object> replacement : replacements.entrySet())
-            {
+            for (Entry<String, Object> replacement : replacements.entrySet()) {
                 out = out.replace(replacement.getKey(), (String) replacement.getValue());
             }
 
             // replace extra lines
-            if (!extraLines.isEmpty())
-            {
+            if (!extraLines.isEmpty()) {
                 String replacement = Joiner.on('\n').join(extraLines);
                 out = out.replace(EXTRA_LINES, replacement);
             }
@@ -108,15 +99,13 @@ public class CreateStartTask extends CachedTask
         }
 
         // now compile, if im compiling.
-        if (compile)
-        {
+        if (compile) {
             final File compiled = getStartOut(); // quas
             compiled.mkdirs(); // wex
 
             // build claspath    exort
             FileCollection col = null;
-            for (String s : classpath)
-            {
+            for (String s : classpath) {
                 FileCollection config = getProject().getConfigurations().getByName(s);
 
                 if (col == null)
@@ -143,14 +132,12 @@ public class CreateStartTask extends CachedTask
             getProject().fileTree(resourceDir).visit(new FileVisitor() {
 
                 @Override
-                public void visitDir(FileVisitDetails arg0)
-                {
+                public void visitDir(FileVisitDetails arg0) {
                     // ignore
                 }
 
                 @Override
-                public void visitFile(FileVisitDetails arg0)
-                {
+                public void visitFile(FileVisitDetails arg0) {
                     arg0.copyTo(arg0.getRelativePath().getFile(compiled));
                 }
 
@@ -159,19 +146,14 @@ public class CreateStartTask extends CachedTask
 
     }
 
-    public static AntBuilder setupAnt(Task task)
-    {
+    public static AntBuilder setupAnt(Task task) {
         AntBuilder ant = task.getAnt();
         LogLevel startLevel = task.getProject().getGradle().getStartParameter().getLogLevel();
-        if (startLevel.compareTo(LogLevel.LIFECYCLE) >= 0)
-        {
+        if (startLevel.compareTo(LogLevel.LIFECYCLE) >= 0) {
             GradleVersion v2_14 = GradleVersion.version("2.14");
-            if (GradleVersion.current().compareTo(v2_14) >= 0)
-            {
+            if (GradleVersion.current().compareTo(v2_14) >= 0) {
                 ant.setLifecycleLogLevel(AntMessagePriority.ERROR);
-            }
-            else
-            {
+            } else {
                 try {
                     LoggingManager.class.getMethod("setLevel", LogLevel.class).invoke(task.getLogging(), LogLevel.ERROR);
                 } catch (Exception e) {
@@ -184,8 +166,7 @@ public class CreateStartTask extends CachedTask
     }
 
     @SuppressWarnings("rawtypes")
-    private String resolveString(Object obj) throws IOException
-    {
+    private String resolveString(Object obj) throws IOException {
         if (obj == null)
             return null;
 
@@ -197,69 +178,57 @@ public class CreateStartTask extends CachedTask
             return obj.toString();
     }
 
-    private String getResource(URL resource)
-    {
-        try
-        {
+    private String getResource(URL resource) {
+        try {
             return Resources.toString(resource, Charsets.UTF_8);
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     /**
      * Use Resources.getResource() for this
+     *
      * @param resource URL of the resource in the jar
-     * @param outName name of the resource once extracted
+     * @param outName  name of the resource once extracted
      */
-    public void addResource(URL resource, String outName)
-    {
+    public void addResource(URL resource, String outName) {
         resources.put(outName, getResource(resource));
     }
 
-    public void removeResource(String key)
-    {
+    public void removeResource(String key) {
         resources.remove(key);
     }
 
-    public void addResource(String resource, String outName)
-    {
+    public void addResource(String resource, String outName) {
         this.addResource(Constants.getResource(resource), outName);
     }
 
-    public void addResource(String thing)
-    {
+    public void addResource(String thing) {
         this.addResource(thing, thing);
     }
 
-    public void addReplacement(String token, Object replacement)
-    {
+    public void addReplacement(String token, Object replacement) {
         replacements.put(token, replacement);
     }
 
-    public void addExtraLine(String extra)
-    {
+    public void addExtraLine(String extra) {
         this.extraLines.add(extra);
     }
 
-    public void addClasspathConfig(String classpathConfig)
-    {
+    public void addClasspathConfig(String classpathConfig) {
         compile = true;
         classpath.add(classpathConfig);
     }
 
-    public File getStartOut()
-    {
+    public File getStartOut() {
         File dir = getProject().file(startOut);
         if (!dir.exists())
             dir.mkdirs();
         return dir;
     }
 
-    public void setStartOut(Object outputFile)
-    {
+    public void setStartOut(Object outputFile) {
         this.startOut = outputFile;
     }
 

@@ -25,34 +25,31 @@ import groovy.lang.Closure;
 import java.util.Objects;
 
 @SuppressWarnings("serial")
-public abstract class DelayedBase<V> extends Closure<V>
-{
+public abstract class DelayedBase<V> extends Closure<V> {
     protected TokenReplacer replacer;
 
     public boolean opt;
 
-    public DelayedBase(Class<?> owner, ReplacementProvider provider, String pattern)
-    {
+    public DelayedBase(Class<?> owner, ReplacementProvider provider, String pattern) {
         super(owner);
         replacer = new TokenReplacer(provider, pattern);
     }
-    
-    public DelayedBase(Class<?> owner, TokenReplacer replacer)
-    {
+
+    public DelayedBase(Class<?> owner, TokenReplacer replacer) {
         super(owner);
         this.replacer = replacer;
     }
 
     /**
      * Does something with the replaced token and returns the proper type.
+     *
      * @param replaced NULL if never resolved before, else the previous resolved value
      * @return The resolved Object V
      */
     protected abstract V resolveDelayed(String replaced);
-    
+
     @Override
-    public final V call()
-    {
+    public final V call() {
         String replaced = null;
         if (opt) {
             if (replacer == null) return null;
@@ -67,25 +64,22 @@ public abstract class DelayedBase<V> extends Closure<V>
             if (replacer != null)
                 replaced = replacer.replace();
         }
-        
+
         return resolveDelayed(replaced);
     }
-    
+
     @Override
-    public final V call(Object obj)
-    {
-        return call();
-    }
-    
-    @Override
-    public final V call(Object... objects)
-    {
+    public final V call(Object obj) {
         return call();
     }
 
     @Override
-    public String toString()
-    {
+    public final V call(Object... objects) {
+        return call();
+    }
+
+    @Override
+    public String toString() {
         return Objects.toString(call());
     }
 }

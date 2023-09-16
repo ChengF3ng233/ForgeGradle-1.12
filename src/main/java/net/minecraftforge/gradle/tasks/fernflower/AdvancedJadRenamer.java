@@ -28,16 +28,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 class AdvancedJadRenamer extends JADNameProvider {
-    private StructMethod wrapper;
+    private final StructMethod wrapper;
     private static final Pattern p = Pattern.compile("func_(\\d+)_.*");
-    public AdvancedJadRenamer(StructMethod wrapper)
-    {
+
+    public AdvancedJadRenamer(StructMethod wrapper) {
         super(wrapper);
         this.wrapper = wrapper;
     }
+
     @Override
-    public String renameAbstractParameter(String abstractParam, int index)
-    {
+    public String renameAbstractParameter(String abstractParam, int index) {
         String result = abstractParam;
         if ((wrapper.getAccessFlags() & CodeConstants.ACC_ABSTRACT) != 0) {
             String methName = wrapper.getName();

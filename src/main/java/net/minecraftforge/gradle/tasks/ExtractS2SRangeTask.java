@@ -20,10 +20,7 @@
  */
 package net.minecraftforge.gradle.tasks;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
-
+import com.google.common.collect.Lists;
 import net.minecraftforge.gradle.common.Constants;
 import net.minecraftforge.gradle.util.SequencedInputSupplier;
 import net.minecraftforge.gradle.util.SourceDirSetSupplier;
@@ -32,7 +29,6 @@ import net.minecraftforge.srg2source.api.SourceVersion;
 import net.minecraftforge.srg2source.util.io.FolderSupplier;
 import net.minecraftforge.srg2source.util.io.InputSupplier;
 import net.minecraftforge.srg2source.util.io.ZipInputSupplier;
-
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.SourceDirectorySet;
@@ -41,12 +37,13 @@ import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.SkipWhenEmpty;
 import org.gradle.api.tasks.TaskAction;
 
-import com.google.common.collect.Lists;
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
 
-public class ExtractS2SRangeTask extends DefaultTask
-{
+public class ExtractS2SRangeTask extends DefaultTask {
     @InputFiles
-    private List<Object> libs = Lists.newArrayList();
+    private final List<Object> libs = Lists.newArrayList();
 
     private final List<Object> sources = Lists.newArrayList();
 
@@ -54,25 +51,20 @@ public class ExtractS2SRangeTask extends DefaultTask
     private Object rangeMap;
 
     @TaskAction
-    public void doTask() throws IOException
-    {
+    public void doTask() throws IOException {
         File rangemap = getRangeMap();
 
         InputSupplier inSup;
 
         if (sources.size() == 0)
             return; // no input.
-        if (sources.size() == 1)
-        {
+        if (sources.size() == 1) {
             // just 1 supplier.
             inSup = getInput(sources.get(0));
-        }
-        else
-        {
+        } else {
             // multinput
             inSup = new SequencedInputSupplier();
-            for (Object o : sources)
-            {
+            for (Object o : sources) {
                 ((SequencedInputSupplier) inSup).add(getInput(o));
             }
         }
@@ -80,18 +72,16 @@ public class ExtractS2SRangeTask extends DefaultTask
         generateRangeMap(inSup, rangemap);
     }
 
-    private void generateRangeMap(InputSupplier inSup, File rangeMap) throws IOException
-    {
+    private void generateRangeMap(InputSupplier inSup, File rangeMap) throws IOException {
         RangeExtractorBuilder builder = new RangeExtractorBuilder()
-                                .sourceCompatibility(SourceVersion.JAVA_1_8)
-                                .input(inSup)
-                                .output(rangeMap)
-                                .logger(Constants.getTaskLogStream(getProject(), this.getName() + ".log"));
+                .sourceCompatibility(SourceVersion.JAVA_1_8)
+                .input(inSup)
+                .output(rangeMap)
+                .logger(Constants.getTaskLogStream(getProject(), this.getName() + ".log"));
 
         getLibs().forEach(builder::library);
 
-        if (rangeMap.exists())
-        {
+        if (rangeMap.exists()) {
             builder.cache(rangeMap);
         }
 
@@ -99,10 +89,8 @@ public class ExtractS2SRangeTask extends DefaultTask
             throw new RuntimeException("RangeMap generation Failed!!!");
     }
 
-    private InputSupplier getInput(Object o) throws IOException
-    {
-        if (o instanceof SourceDirectorySet)
-        {
+    private InputSupplier getInput(Object o) throws IOException {
+        if (o instanceof SourceDirectorySet) {
             return new SourceDirSetSupplier((SourceDirectorySet) o);
         }
 
@@ -112,59 +100,45 @@ public class ExtractS2SRangeTask extends DefaultTask
 
         if (f.isDirectory())
             return new FolderSupplier(f);
-        else if (f.getPath().endsWith(".jar") || f.getPath().endsWith(".zip"))
-        {
+        else if (f.getPath().endsWith(".jar") || f.getPath().endsWith(".zip")) {
             ZipInputSupplier supp = new ZipInputSupplier();
             supp.readZip(f);
             return supp;
-        }
-        else
+        } else
             throw new IllegalArgumentException("Can only make suppliers out of directories, zips, and SourceDirectorySets right now!");
     }
 
-    public File getRangeMap()
-    {
+    public File getRangeMap() {
         return getProject().file(rangeMap);
     }
 
-    public void setRangeMap(Object out)
-    {
+    public void setRangeMap(Object out) {
         this.rangeMap = out;
     }
 
-    @InputFiles @SkipWhenEmpty
-    public FileCollection getSources()
-    {
+    @InputFiles
+    @SkipWhenEmpty
+    public FileCollection getSources() {
         FileCollection collection = null;
 
-        for (Object o: this.sources)
-        {
+        for (Object o : this.sources) {
             FileCollection col;
 
-            if (o instanceof SourceDirectorySet)
-            {
+            if (o instanceof SourceDirectorySet) {
                 col = (FileCollection) o;
-            }
-            else
-            {
+            } else {
                 File f = getProject().file(o);
 
-                if (f.isDirectory())
-                {
+                if (f.isDirectory()) {
                     col = getProject().fileTree(f);
-                }
-                else
-                {
+                } else {
                     col = getProject().files(f);
                 }
             }
 
-            if (collection == null)
-            {
+            if (collection == null) {
                 collection = col;
-            }
-            else
-            {
+            } else {
                 collection = collection.plus(col);
             }
         }
@@ -172,24 +146,18 @@ public class ExtractS2SRangeTask extends DefaultTask
         return collection;
     }
 
-    public void addSource(Object in)
-    {
+    public void addSource(Object in) {
         this.sources.add(in);
     }
 
-    public FileCollection getLibs()
-    {
+    public FileCollection getLibs() {
         FileCollection collection = null;
 
-        for (Object o : libs)
-        {
+        for (Object o : libs) {
             FileCollection col;
-            if (o instanceof FileCollection)
-            {
+            if (o instanceof FileCollection) {
                 col = (FileCollection) o;
-            }
-            else
-            {
+            } else {
                 col = getProject().files(o);
             }
 
@@ -202,8 +170,7 @@ public class ExtractS2SRangeTask extends DefaultTask
         return collection;
     }
 
-    public void addLibs(Object libs)
-    {
+    public void addLibs(Object libs) {
         this.libs.add(libs);
     }
 }

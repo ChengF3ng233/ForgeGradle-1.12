@@ -20,16 +20,8 @@
  */
 package net.minecraftforge.gradle.patcher;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.net.URLClassLoader;
-import java.nio.charset.Charset;
-import java.util.LinkedList;
-import java.util.List;
-
+import com.google.common.collect.Lists;
+import com.google.common.io.Files;
 import net.md_5.specialsource.Jar;
 import net.md_5.specialsource.JarMapping;
 import net.md_5.specialsource.JarRemapper;
@@ -38,43 +30,48 @@ import net.md_5.specialsource.provider.JarProvider;
 import net.md_5.specialsource.provider.JointProvider;
 import net.minecraftforge.gradle.common.Constants;
 import net.minecraftforge.gradle.util.mcp.ReobfExceptor;
-
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.tasks.Input;
-import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.InputFiles;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
+import org.gradle.api.tasks.*;
 
-import com.google.common.collect.Lists;
-import com.google.common.io.Files;
+import java.io.*;
+import java.net.URLClassLoader;
+import java.nio.charset.Charset;
+import java.util.LinkedList;
+import java.util.List;
 
-class TaskReobfuscate extends DefaultTask
-{
+class TaskReobfuscate extends DefaultTask {
     //@formatter:off
-    @InputFile  private Object inJar;
-    @InputFile  private Object preFFJar;
-    @InputFile  private Object srg;
-    @InputFile  private Object exc;
-    @InputFile  private Object methodsCsv;
-    @InputFile  private Object fieldsCsv;
-    @OutputFile private Object outJar;
+    @InputFile
+    private Object inJar;
+    @InputFile
+    private Object preFFJar;
+    @InputFile
+    private Object srg;
+    @InputFile
+    private Object exc;
+    @InputFile
+    private Object methodsCsv;
+    @InputFile
+    private Object fieldsCsv;
+    @OutputFile
+    private Object outJar;
     //@formatter: on
-    
+
     @Input
     private LinkedList<String> extraSrg = new LinkedList<String>();
-    
+
     @InputFiles
-    private List<Object> libs = Lists.newArrayList();
-    
+    private final List<Object> libs = Lists.newArrayList();
+
     //@formatter:off
-    public TaskReobfuscate() { super(); }
+    public TaskReobfuscate() {
+        super();
+    }
     //@formatter:on
 
     @TaskAction
-    public void doTask() throws IOException
-    {
+    public void doTask() throws IOException {
         File inJar = getInJar();
         File srg = getSrg();
 
@@ -85,20 +82,18 @@ class TaskReobfuscate extends DefaultTask
             exceptor.excConfig = getExc();
             exceptor.fieldCSV = getFieldsCsv();
             exceptor.methodCSV = getMethodsCsv();
-            
-            File outSrg =  new File(this.getTemporaryDir(), "reobf_cls.srg");
-            
+
+            File outSrg = new File(this.getTemporaryDir(), "reobf_cls.srg");
+
             exceptor.doFirstThings();
             exceptor.buildSrg(srg, outSrg);
-            
+
             srg = outSrg;
         }
-        
+
         // append SRG
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(srg, true)))
-        {
-            for (String line : extraSrg)
-            {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(srg, true))) {
+            for (String line : extraSrg) {
                 writer.write(line);
                 writer.newLine();
             }
@@ -107,8 +102,7 @@ class TaskReobfuscate extends DefaultTask
         obfuscate(inJar, getLibs(), srg);
     }
 
-    private void obfuscate(File inJar, FileCollection classpath, File srg) throws FileNotFoundException, IOException
-    {
+    private void obfuscate(File inJar, FileCollection classpath, File srg) throws IOException {
         // load mapping
         JarMapping mapping = new JarMapping();
         mapping.loadMappings(Files.newReader(srg, Charset.defaultCharset()), null, null, false);
@@ -118,8 +112,7 @@ class TaskReobfuscate extends DefaultTask
 
         // load jar
         URLClassLoader classLoader = null;
-        try (Jar input = Jar.init(inJar))
-        {
+        try (Jar input = Jar.init(inJar)) {
             // ensure that inheritance provider is used
             JointProvider inheritanceProviders = new JointProvider();
             inheritanceProviders.add(new JarProvider(input));
@@ -137,122 +130,98 @@ class TaskReobfuscate extends DefaultTask
 
             // remap jar
             remapper.remapJar(input, getOutJar());
-        }
-        finally
-        {
+        } finally {
             if (classLoader != null)
                 classLoader.close();
         }
     }
-    
-    public File getInJar()
-    {
+
+    public File getInJar() {
         return getProject().file(inJar);
     }
 
-    public void setInJar(Object inJar)
-    {
+    public void setInJar(Object inJar) {
         this.inJar = inJar;
     }
 
-    public File getOutJar()
-    {
+    public File getOutJar() {
         return getProject().file(outJar);
     }
 
-    public void setOutJar(Object outJar)
-    {
+    public void setOutJar(Object outJar) {
         this.outJar = outJar;
     }
-    
-    public File getPreFFJar()
-    {
+
+    public File getPreFFJar() {
         return getProject().file(preFFJar);
     }
 
-    public void setPreFFJar(Object preFFJar)
-    {
+    public void setPreFFJar(Object preFFJar) {
         this.preFFJar = preFFJar;
     }
 
-    public File getSrg()
-    {
+    public File getSrg() {
         return getProject().file(srg);
     }
 
-    public void setSrg(Object srg)
-    {
+    public void setSrg(Object srg) {
         this.srg = srg;
     }
 
-    public File getExc()
-    {
+    public File getExc() {
         return getProject().file(exc);
     }
 
-    public void setExc(Object exc)
-    {
+    public void setExc(Object exc) {
         this.exc = exc;
     }
 
 
-    public File getMethodsCsv()
-    {
+    public File getMethodsCsv() {
         return getProject().file(methodsCsv);
     }
 
-    public void setMethodsCsv(Object methodsCsv)
-    {
+    public void setMethodsCsv(Object methodsCsv) {
         this.methodsCsv = methodsCsv;
     }
 
-    public File getFieldsCsv()
-    {
+    public File getFieldsCsv() {
         return getProject().file(fieldsCsv);
     }
 
-    public void setFieldsCsv(Object fieldsCsv)
-    {
+    public void setFieldsCsv(Object fieldsCsv) {
         this.fieldsCsv = fieldsCsv;
     }
 
-    public LinkedList<String> getExtraSrg()
-    {
+    public LinkedList<String> getExtraSrg() {
         return extraSrg;
     }
 
-    public void setExtraSrg(LinkedList<String> extraSrg)
-    {
+    public void setExtraSrg(LinkedList<String> extraSrg) {
         this.extraSrg = extraSrg;
     }
-    
-    public FileCollection getLibs()
-    {
+
+    public FileCollection getLibs() {
         FileCollection collection = null;
-        
-        for (Object o : libs)
-        {
+
+        for (Object o : libs) {
             FileCollection col;
-            if (o instanceof FileCollection)
-            {
+            if (o instanceof FileCollection) {
                 col = (FileCollection) o;
-            }
-            else
-            {
+            } else {
                 col = getProject().files(o);
             }
-            
+
             if (collection == null)
                 collection = col;
             else
                 collection = collection.plus(col);
         }
-        
+
         return collection;
     }
 
-    public void addLibs(Object libs)
-    {
+    public void addLibs(Object libs) {
         this.libs.add(libs);
     }
 }

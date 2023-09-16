@@ -20,35 +20,10 @@
  */
 package net.minecraftforge.gradle.user;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
-
-import org.gradle.api.DefaultTask;
-import org.gradle.api.file.FileCollection;
-import org.gradle.api.tasks.Input;
-import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.InputFiles;
-import org.gradle.api.tasks.Internal;
-import org.gradle.api.tasks.Optional;
-import org.gradle.api.tasks.TaskAction;
-
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
-
 import groovy.lang.Closure;
 import net.md_5.specialsource.Jar;
 import net.md_5.specialsource.JarMapping;
@@ -59,6 +34,17 @@ import net.md_5.specialsource.provider.JointProvider;
 import net.minecraftforge.gradle.common.Constants;
 import net.minecraftforge.gradle.util.GradleConfigurationException;
 import net.minecraftforge.gradle.util.mcp.ReobfExceptor;
+import org.gradle.api.DefaultTask;
+import org.gradle.api.file.FileCollection;
+import org.gradle.api.tasks.Optional;
+import org.gradle.api.tasks.*;
+
+import java.io.*;
+import java.net.URLClassLoader;
+import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Reobfuscates an arbitrary jar artifact.
@@ -68,7 +54,7 @@ import net.minecraftforge.gradle.util.mcp.ReobfExceptor;
  * script.
  *
  * <pre>
- *reobf {
+ * reobf {
  *    // the jar artifact to reobfuscate
  *    jar {
  *
@@ -95,32 +81,29 @@ import net.minecraftforge.gradle.util.mcp.ReobfExceptor;
  *    // Some other artifact using default settings
  *    // the brackets are needed to create it
  *    otherJar {}
- *}
+ * }
  * </pre>
- *
  */
-public class TaskSingleReobf extends DefaultTask
-{
-    private Object                 jar;
-    private FileCollection         classpath;
+public class TaskSingleReobf extends DefaultTask {
+    private Object jar;
+    private FileCollection classpath;
 
     // because decomp stuff
-    private Object                 fieldCsv;
-    private Object                 methodCsv;
-    private Object                 exceptorCfg;
-    private Object                 deobfFile;
-    private Object                 recompFile;
-    private boolean                isDecomp          = false;
+    private Object fieldCsv;
+    private Object methodCsv;
+    private Object exceptorCfg;
+    private Object deobfFile;
+    private Object recompFile;
+    private boolean isDecomp = false;
 
-    private Object                 primarySrg;
-    private List<Object>           secondarySrgFiles = Lists.newArrayList();
-    private List<String>           extraSrgLines     = Lists.newArrayList();
+    private Object primarySrg;
+    private final List<Object> secondarySrgFiles = Lists.newArrayList();
+    private final List<String> extraSrgLines = Lists.newArrayList();
 
-    private List<ReobfTransformer> preTransformers   = Lists.newArrayList();
-    private List<ReobfTransformer> postTransformers  = Lists.newArrayList();
+    private final List<ReobfTransformer> preTransformers = Lists.newArrayList();
+    private final List<ReobfTransformer> postTransformers = Lists.newArrayList();
 
-    public TaskSingleReobf()
-    {
+    public TaskSingleReobf() {
         super();
         this.getOutputs().upToDateWhen(Constants.CALL_FALSE); // allways execute period
     }
@@ -129,8 +112,7 @@ public class TaskSingleReobf extends DefaultTask
     // --------------------------------------------
 
     @TaskAction
-    public void doTask() throws IOException
-    {
+    public void doTask() throws IOException {
         // prepare Srgs
         File srg = File.createTempFile("reobf-default", ".srg", getTemporaryDir());
         File srgLines = File.createTempFile("reobf-extraLines", ".srg", getTemporaryDir());
@@ -138,8 +120,7 @@ public class TaskSingleReobf extends DefaultTask
         srg.deleteOnExit();
         srgLines.deleteOnExit();
 
-        if (isDecomp())
-        {
+        if (isDecomp()) {
             ReobfExceptor exc = new ReobfExceptor();
             exc.deobfJar = getDeobfFile();
             exc.toReobfJar = getRecompFile();
@@ -148,24 +129,19 @@ public class TaskSingleReobf extends DefaultTask
             exc.methodCSV = getMethodCsv();
             exc.doFirstThings();
             exc.buildSrg(getPrimarySrg(), srg);
-        }
-        else
-        {
+        } else {
             Files.copy(getPrimarySrg(), srg);
         }
 
         // generate extraSrg
         {
-            if (!srgLines.exists())
-            {
+            if (!srgLines.exists()) {
                 srgLines.getParentFile().mkdirs();
                 srgLines.createNewFile();
             }
 
-            try (BufferedWriter writer = Files.newWriter(srgLines, Charsets.UTF_8))
-            {
-                for (String line : getExtraSrgLines())
-                {
+            try (BufferedWriter writer = Files.newWriter(srgLines, Charsets.UTF_8)) {
+                for (String line : getExtraSrgLines()) {
                     writer.write(line);
                     writer.newLine();
                 }
@@ -180,8 +156,7 @@ public class TaskSingleReobf extends DefaultTask
 
         // pre-transform
         List<ReobfTransformer> transformers = getPreTransformers();
-        if (!transformers.isEmpty())
-        {
+        if (!transformers.isEmpty()) {
             File transformed = File.createTempFile("preTransformed", ".jar", getTemporaryDir());
             transformed.deleteOnExit();
             applyExtraTransformers(tempIn, transformed, transformers);
@@ -198,8 +173,7 @@ public class TaskSingleReobf extends DefaultTask
 
         // post transform
         transformers = getPostTransformers();
-        if (!transformers.isEmpty())
-        {
+        if (!transformers.isEmpty()) {
             File transformed = File.createTempFile("postTransformed", ".jar", getTemporaryDir());
             transformed.deleteOnExit();
             applyExtraTransformers(obfuscated, transformed, transformers);
@@ -212,15 +186,13 @@ public class TaskSingleReobf extends DefaultTask
         obfuscated.delete();
     }
 
-    private void applySpecialSource(File input, File output, File srg, File extraSrg, FileCollection extraSrgFiles) throws IOException
-    {
+    private void applySpecialSource(File input, File output, File srg, File extraSrg, FileCollection extraSrgFiles) throws IOException {
         // load mapping
         JarMapping mapping = new JarMapping();
         mapping.loadMappings(srg);
         mapping.loadMappings(extraSrg);
 
-        for (File f : extraSrgFiles)
-        {
+        for (File f : extraSrgFiles) {
             mapping.loadMappings(f);
         }
 
@@ -229,8 +201,7 @@ public class TaskSingleReobf extends DefaultTask
 
         // load jar
         URLClassLoader classLoader = null;
-        try (Jar inputJar = Jar.init(input))
-        {
+        try (Jar inputJar = Jar.init(input)) {
             // ensure that inheritance provider is used
             JointProvider inheritanceProviders = new JointProvider();
             inheritanceProviders.add(new JarProvider(inputJar));
@@ -242,23 +213,17 @@ public class TaskSingleReobf extends DefaultTask
 
             // remap jar
             remapper.remapJar(inputJar, output);
-        }
-        finally
-        {
+        } finally {
             if (classLoader != null)
                 classLoader.close();
         }
     }
 
-    private void applyExtraTransformers(File inJar, File outJar, List<ReobfTransformer> transformers) throws IOException
-    {
+    private void applyExtraTransformers(File inJar, File outJar, List<ReobfTransformer> transformers) throws IOException {
         try (ZipFile in = new ZipFile(inJar);
-             ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outJar))))
-        {
-            for (ZipEntry e : Collections.list(in.entries()))
-            {
-                if (e.isDirectory())
-                {
+             ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outJar)))) {
+            for (ZipEntry e : Collections.list(in.entries())) {
+                if (e.isDirectory()) {
                     out.putNextEntry(e);
                     continue;
                 }
@@ -269,10 +234,8 @@ public class TaskSingleReobf extends DefaultTask
                 byte[] data = ByteStreams.toByteArray(in.getInputStream(e));
 
                 // correct source name
-                if (e.getName().endsWith(".class"))
-                {
-                    for (ReobfTransformer trans : transformers)
-                    {
+                if (e.getName().endsWith(".class")) {
+                    for (ReobfTransformer trans : transformers) {
                         data = trans.transform(data);
                     }
                 }
@@ -287,24 +250,20 @@ public class TaskSingleReobf extends DefaultTask
 
     // both input and output
     @Internal
-    public File getJar()
-    {
+    public File getJar() {
         return getProject().file(jar);
     }
 
-    public void setJar(Object jar)
-    {
+    public void setJar(Object jar) {
         this.jar = jar;
     }
 
     @InputFiles
-    public FileCollection getClasspath()
-    {
+    public FileCollection getClasspath() {
         return classpath;
     }
 
-    public void setClasspath(FileCollection classpath)
-    {
+    public void setClasspath(FileCollection classpath) {
         this.classpath = classpath;
     }
 
@@ -312,43 +271,33 @@ public class TaskSingleReobf extends DefaultTask
     // --------------------------------------------
 
     @InputFile
-    public File getPrimarySrg()
-    {
+    public File getPrimarySrg() {
         if (primarySrg == null)
             throw new GradleConfigurationException("Primary reobfuscation for Task '" + getName() + "' isnt set!");
         return getProject().file(primarySrg);
     }
 
-    public void setPrimarySrg(Object srg)
-    {
+    public void setPrimarySrg(Object srg) {
         this.primarySrg = srg;
     }
 
-    public void addSecondarySrgFile(Object thing)
-    {
+    public void addSecondarySrgFile(Object thing) {
         secondarySrgFiles.add(thing);
     }
 
     @InputFiles
-    public FileCollection getSecondarySrgFiles()
-    {
+    public FileCollection getSecondarySrgFiles() {
         List<File> files = new ArrayList<File>(secondarySrgFiles.size());
 
-        for (Object thing : getProject().files(secondarySrgFiles))
-        {
+        for (Object thing : getProject().files(secondarySrgFiles)) {
             File f = getProject().file(thing);
-            if (f.isDirectory())
-            {
-                for (File nested : getProject().fileTree(f))
-                {
-                    if ("srg".equals(Files.getFileExtension(nested.getName()).toLowerCase()))
-                    {
+            if (f.isDirectory()) {
+                for (File nested : getProject().fileTree(f)) {
+                    if ("srg".equalsIgnoreCase(Files.getFileExtension(nested.getName()))) {
                         files.add(nested.getAbsoluteFile());
                     }
                 }
-            }
-            else if ("srg".equals(Files.getFileExtension(f.getName()).toLowerCase()))
-            {
+            } else if ("srg".equalsIgnoreCase(Files.getFileExtension(f.getName()))) {
                 files.add(f.getAbsoluteFile());
             }
         }
@@ -357,92 +306,81 @@ public class TaskSingleReobf extends DefaultTask
     }
 
     @Input
-    public List<String> getExtraSrgLines()
-    {
+    public List<String> getExtraSrgLines() {
         return extraSrgLines;
     }
 
-    public void addExtraSrgLine(String srgLine)
-    {
+    public void addExtraSrgLine(String srgLine) {
         this.extraSrgLines.add(srgLine);
     }
 
-    public void addExtraSrgLines(String... srgLines)
-    {
+    public void addExtraSrgLines(String... srgLines) {
         this.extraSrgLines.addAll(Arrays.asList(srgLines));
     }
 
-    public void addExtraSrgLines(Collection<String> srgLines)
-    {
+    public void addExtraSrgLines(Collection<String> srgLines) {
         this.extraSrgLines.addAll(srgLines);
     }
 
     // GETTERS AND STUF FOR DECOMP SPECIFIC STUFF
     // --------------------------------------------
 
-    @InputFile @Optional
-    public File getFieldCsv()
-    {
+    @InputFile
+    @Optional
+    public File getFieldCsv() {
         return fieldCsv == null ? null : getProject().file(fieldCsv);
     }
 
-    public void setFieldCsv(Object fieldCsv)
-    {
+    public void setFieldCsv(Object fieldCsv) {
         this.fieldCsv = fieldCsv;
     }
 
-    @InputFile @Optional
-    public File getMethodCsv()
-    {
+    @InputFile
+    @Optional
+    public File getMethodCsv() {
         return methodCsv == null ? null : getProject().file(methodCsv);
     }
 
-    public void setMethodCsv(Object methodCsv)
-    {
+    public void setMethodCsv(Object methodCsv) {
         this.methodCsv = methodCsv;
     }
 
-    @InputFile @Optional
-    public File getExceptorCfg()
-    {
+    @InputFile
+    @Optional
+    public File getExceptorCfg() {
         return exceptorCfg == null ? null : getProject().file(exceptorCfg);
     }
 
-    public void setExceptorCfg(Object file)
-    {
+    public void setExceptorCfg(Object file) {
         this.exceptorCfg = file;
     }
 
-    @InputFile @Optional
-    public File getDeobfFile()
-    {
+    @InputFile
+    @Optional
+    public File getDeobfFile() {
         return deobfFile == null ? null : getProject().file(deobfFile);
     }
 
-    public void setDeobfFile(Object deobfFile)
-    {
+    public void setDeobfFile(Object deobfFile) {
         this.deobfFile = deobfFile;
     }
 
-    @InputFile @Optional
-    public File getRecompFile()
-    {
+    @InputFile
+    @Optional
+    public File getRecompFile() {
         return recompFile == null ? null : getProject().file(recompFile);
     }
 
-    public void setRecompFile(Object recompFile)
-    {
+    public void setRecompFile(Object recompFile) {
         this.recompFile = recompFile;
     }
 
     @Input
-    public boolean isDecomp()
-    {
+    public boolean isDecomp() {
         return isDecomp;
     }
 
-    public void setDecomp(boolean isDecomp)
-    {
+    public void setDecomp(boolean isDecomp) {
         this.isDecomp = isDecomp;
     }
 
@@ -450,51 +388,42 @@ public class TaskSingleReobf extends DefaultTask
     // --------------------------------------------
 
     @Input
-    public List<ReobfTransformer> getPostTransformers()
-    {
+    public List<ReobfTransformer> getPostTransformers() {
         return postTransformers; // Autobots! ROLL OUT!
     }
 
-    public void addPostTransformer(ReobfTransformer autobot)
-    {
+    public void addPostTransformer(ReobfTransformer autobot) {
         postTransformers.add(autobot);
     }
 
-    public void addPostTransformer(Closure<byte[]> decepticon)
-    {
+    public void addPostTransformer(Closure<byte[]> decepticon) {
         postTransformers.add(new ClosureTransformer(decepticon));
     }
 
     @Input
-    public List<ReobfTransformer> getPreTransformers()
-    {
+    public List<ReobfTransformer> getPreTransformers() {
         return preTransformers; // Autobots! ROLL OUT!
     }
 
-    public void addPreTransformer(ReobfTransformer autobot)
-    {
+    public void addPreTransformer(ReobfTransformer autobot) {
         preTransformers.add(autobot);
     }
 
-    public void addPreTransformer(Closure<byte[]> decepticon)
-    {
+    public void addPreTransformer(Closure<byte[]> decepticon) {
         preTransformers.add(new ClosureTransformer(decepticon));
     }
 
-    public static class ClosureTransformer implements ReobfTransformer
-    {
+    public static class ClosureTransformer implements ReobfTransformer {
         private static final long serialVersionUID = 1L;
-        private Closure<byte[]>   closure;
+        private final Closure<byte[]> closure;
 
-        public ClosureTransformer(Closure<byte[]> closure)
-        {
+        public ClosureTransformer(Closure<byte[]> closure) {
             super();
             this.closure = closure;
         }
 
         @Override
-        public byte[] transform(byte[] data)
-        {
+        public byte[] transform(byte[] data) {
             return closure.call(data);
         }
     }

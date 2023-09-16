@@ -20,6 +20,17 @@
  */
 package net.minecraftforge.gradle.tasks;
 
+import com.google.common.io.ByteStreams;
+import com.google.common.io.Files;
+import net.minecraftforge.gradle.common.Constants;
+import net.minecraftforge.gradle.util.caching.Cached;
+import net.minecraftforge.gradle.util.caching.CachedTask;
+import net.minecraftforge.gradle.util.delayed.DelayedFile;
+import net.minecraftforge.gradle.util.delayed.DelayedString;
+import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.TaskAction;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -28,21 +39,7 @@ import java.net.URL;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import net.minecraftforge.gradle.common.Constants;
-import net.minecraftforge.gradle.util.caching.Cached;
-import net.minecraftforge.gradle.util.caching.CachedTask;
-import net.minecraftforge.gradle.util.delayed.DelayedFile;
-import net.minecraftforge.gradle.util.delayed.DelayedString;
-
-import org.gradle.api.tasks.Input;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
-
-import com.google.common.io.ByteStreams;
-import com.google.common.io.Files;
-
-public class ObtainFernFlowerTask extends CachedTask
-{
+public class ObtainFernFlowerTask extends CachedTask {
     @Input
     private DelayedString mcpUrl;
 
@@ -51,10 +48,8 @@ public class ObtainFernFlowerTask extends CachedTask
     private DelayedFile ffJar;
 
     @TaskAction
-    public void doTask() throws MalformedURLException, IOException
-    {
-        if (getProject().getGradle().getStartParameter().isOffline())
-        {
+    public void doTask() throws IOException {
+        if (getProject().getGradle().getStartParameter().isOffline()) {
             getLogger().error("Offline mode! not downloading Fernflower!");
             this.setDidWork(false);
             return;
@@ -70,14 +65,11 @@ public class ObtainFernFlowerTask extends CachedTask
         connect.setRequestProperty("User-Agent", Constants.USER_AGENT);
         connect.setInstanceFollowRedirects(true);
 
-        try (final ZipInputStream zin = new ZipInputStream(connect.getInputStream()))
-        {
+        try (final ZipInputStream zin = new ZipInputStream(connect.getInputStream())) {
             ZipEntry entry;
 
-            while ((entry = zin.getNextEntry()) != null)
-            {
-                if (Constants.lower(entry.getName()).endsWith("fernflower.jar"))
-                {
+            while ((entry = zin.getNextEntry()) != null) {
+                if (Constants.lower(entry.getName()).endsWith("fernflower.jar")) {
                     ff.getParentFile().mkdirs();
                     Files.touch(ff);
                     Files.write(ByteStreams.toByteArray(zin), ff);
@@ -88,23 +80,19 @@ public class ObtainFernFlowerTask extends CachedTask
         getLogger().info("Download and Extraction complete");
     }
 
-    public String getMcpUrl()
-    {
+    public String getMcpUrl() {
         return mcpUrl.call();
     }
 
-    public void setMcpUrl(DelayedString mcpUrl)
-    {
+    public void setMcpUrl(DelayedString mcpUrl) {
         this.mcpUrl = mcpUrl;
     }
 
-    public File getFfJar()
-    {
+    public File getFfJar() {
         return ffJar.call();
     }
 
-    public void setFfJar(DelayedFile ffJar)
-    {
+    public void setFfJar(DelayedFile ffJar) {
         this.ffJar = ffJar;
     }
 }
